@@ -1,0 +1,1187 @@
+---
+title: "FAXDC2_annotation_heatmap"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+  short=FALSE #if short==TRUE, do not echo code chunks
+  debug=FALSE
+  knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='figures/',
+               echo=!short, warning=debug, message=debug, dev=c("png", "cairo_pdf"))
+```
+
+```{r}
+library(stringr)
+library(ggplot2)
+library(scales)
+reactome.annotations= list()
+gobp.annotation = list()
+gomf.annotation = list()
+gocc.annotation = list()
+
+for( i in 1:6 ){
+  gobp.annotation[[as.character(i)]] =read.delim(paste("Annotation/GO/LFC_6/enrichments_May_07_2019_BP_C", i, ".txt", sep=""))
+  
+    gomf.annotation[[as.character(i)]] =read.delim(paste("Annotation/GO/LFC_6/enrichments_May_07_2019_MF_C", i, ".txt", sep=""))
+    
+      gocc.annotation[[as.character(i)]] =read.delim(paste("Annotation/GO/LFC_6/enrichments_May_07_2019_CC_C", i, ".txt", sep=""))
+  
+  reactome.annotations[[as.character(i)]] =read.delim(paste("Annotation/REACTOME/LFC_6/enrichments_May_08_2019_C", i, ".txt", sep=""))
+  reactome.annotations[[as.character(i)]]$ID =   str_sub(reactome.annotations[[as.character(i)]]$ID, 7, nchar(as.character(reactome.annotations[[as.character(i)]]$ID)))
+
+}
+
+
+
+```
+
+```{r}
+c(4,5,3,1,6,2)
+#A B C D E F
+
+for(i in names(gobp.annotation)){
+  print(i)
+  print(dim(gobp.annotation[[i]]))
+  if("Cluster" %in% names(gobp.annotation[[i]])){
+    gobp.annotation[[i]]$Cluster = NULL
+  }
+  gobp.annotation[[i]]$cluster = ifelse(i == "1", "D",  
+                          ifelse(i == "2", "F",  
+                          ifelse(i == "3", "C", 
+                          ifelse(i == "4", "A", 
+                          ifelse(i == "5", "B", 
+                          ifelse(i == "6", "E", NA))))))
+}
+
+gobp = do.call(rbind, gobp.annotation)
+
+for(i in names(gocc.annotation)){
+  print(i)
+  print(dim(gocc.annotation[[i]]))
+  if("Cluster" %in% names(gocc.annotation[[i]])){
+    gocc.annotation[[i]]$Cluster = NULL
+  }
+  gocc.annotation[[i]]$cluster = ifelse(i == "1", "D",  
+                          ifelse(i == "2", "F",  
+                          ifelse(i == "3", "C", 
+                          ifelse(i == "4", "A", 
+                          ifelse(i == "5", "B", 
+                          ifelse(i == "6", "E", NA))))))
+}
+
+gocc = do.call(rbind, gocc.annotation)
+
+for(i in names(gomf.annotation)){
+  print(i)
+  print(dim(gomf.annotation[[i]]))
+  if("Cluster" %in% names(gomf.annotation[[i]])){
+    gomf.annotation[[i]]$Cluster = NULL
+  }
+  gomf.annotation[[i]]$cluster = ifelse(i == "1", "D",  
+                          ifelse(i == "2", "F",  
+                          ifelse(i == "3", "C", 
+                          ifelse(i == "4", "A", 
+                          ifelse(i == "5", "B", 
+                          ifelse(i == "6", "E", NA))))))
+}
+
+gomf = do.call(rbind, gomf.annotation)
+
+
+for(i in names(reactome.annotations)){
+  print(i)
+  print(dim(reactome.annotations[[i]]))
+  if("Cluster" %in% names(reactome.annotations[[i]])){
+    reactome.annotations[[i]]$Cluster = NULL
+  }
+  reactome.annotations[[i]]$cluster = ifelse(i == "1", "D",  
+                          ifelse(i == "2", "F",  
+                          ifelse(i == "3", "C", 
+                          ifelse(i == "4", "A", 
+                          ifelse(i == "5", "B", 
+                          ifelse(i == "6", "E", NA))))))
+}
+reactome = do.call(rbind, reactome.annotations)
+
+write.table(reactome, "~/Downloads/faxdc2_reactome.txt", sep="\t", quote=FALSE)
+
+write.table(gomf, "~/Downloads/faxdc2_gomf.txt", sep="\t", quote=FALSE)
+
+write.table(gobp, "~/Downloads/faxdc2_gobp.txt", sep="\t", quote=FALSE)
+
+write.table(gocc, "~/Downloads/faxdc2_gocc.txt", sep="\t", quote=FALSE)
+```
+
+
+
+```{r}
+
+annotations = data.frame(ID = c(), Term = c(), cluster = c(), qvalue = c(), or=c(), count = c(), size=c())
+ids.of.interest = c("GO:0016192", "GO:0006897", "GO:0006695", "GO:0007155", "GO:0090069",
+                    "GO:0007156", "GO:0043087", "GO:0000902", "GO:0007166", "GO:0042254")
+for(cl in 1:6){{
+  x = gobp.annotation[[as.character(cl)]][gobp.annotation[[as.character(cl)]]$GOBPID %in% ids.of.interest,]
+  if(nrow(x)>0){
+  annotations = rbind(annotations, data.frame(ID = x$GOBPID, Term = x$Term, cluster = as.character(cl), qvalue = x$adjustedPvalue, or=x$OddsRatio, gr=x$Count / x$Size))
+  }
+}}
+
+
+ids.of.interest = c("191273", "177929", "446728", "166520", "1655829", "186797", "5653656", "1227986", "597592", "1474228", "4791275", "388396", "881907", "1251932", "9006934", "1500931",
+                    "199991", "190236", "194138", "2682334")
+
+	
+
+for(cl in 1:6){{
+  x = reactome.annotations[[as.character(cl)]][reactome.annotations[[as.character(cl)]]$ID %in% ids.of.interest,]
+  if(nrow(x)>0){
+  annotations = rbind(annotations, data.frame(ID = x$ID, Term = x$Description, cluster = as.character(cl), qvalue = x$qvalue, or=0, gr=0))
+  }
+}}
+
+annotations$cluster = factor(as.character(annotations$cluster), rev(c(4,5,3,1,6,2)))
+annotations = annotations[!is.na(annotations$Term),]
+
+annotations$logFDR = -log10(annotations$qvalue)
+
+
+annotations$Term = factor(as.character(annotations$Term), c("ribosome biogenesis", "regulation of ribosome biogenesis", "vesicle-mediated transport", "endocytosis","cell surface receptor signaling pathway", "regulation of GTPase activity", "cell morphogenesis", "cell adhesion",  "Signaling by VEGF",  "Degradation of the extracellular matrix", "EPH-Ephrin signaling",
+                                                             "Signaling by Receptor Tyrosine Kinases", "Cell-Cell communication"))
+
+	
+
+annotations = annotations[!is.na(annotations$Term),]
+
+
+ggplot(annotations, aes(x=Term, y=cluster, fill=qvalue)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), 
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=annotations[annotations$qvalue < 0.1, ],aes(x=Term,y=cluster),size=1,fill=NA, colour="black")
+
+```
+
+```{r}
+#c(4,5,3,1,6,2)
+# A B C D E F
+
+tfbs.annotations = data.frame(cluster=c(), id=c(), name=c(), p=c(),adj_p.value=c(), evalue=c(), padj=c())
+for(cid in c(4,5,3,1,6,2)){
+ tmp =read.delim(paste("Annotation/TFBS/LFC_6/cluster",cid,"_faxdc2_bg/ame.tsv", sep=""))
+ tmp = tmp[!is.na(tmp$adj_p.value),]
+  tmp$padj = p.adjust(tmp$p.value, "fdr")
+  tfbs.annotations = rbind(tfbs.annotations,  data.frame(cluster=cid, id=tmp$motif_ID, name=tmp$motif_alt_ID, p=tmp$p.value, adj_p.value=tmp$adj_p.value, evalue=tmp$E.value, padj=tmp$padj))
+}
+
+
+cid = 6
+ggplot(tfbs.annotations[tfbs.annotations$cluster == cid & tfbs.annotations$adj_p.value < 0.1,], aes(x=name, y=cluster, fill=adj_p.value)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), 
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=tfbs.annotations[tfbs.annotations$cluster == cid & tfbs.annotations$adj_p.value < 0.1, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+
+
+
+
+signif.names = unique(tfbs.annotations$JASPAR.ID[tfbs.annotations$FDR < 0.1])
+
+tfbs.annotations$cluster = factor(as.character(tfbs.annotations$cluster), rev(c(4,5,3,1,6,2)))
+
+
+tfbs.annotations$Name = factor(tfbs.annotations$Name,
+c( "FOSL1", "FOSL2",  "JUNB",   "FOS", "JUND",  "JUN(var.2)", "JDP2",  "JUN",  "NFE2", "MZF1",  "SP1",  "KLF9", "TFAP2B", "TBX5",  "REL" ))
+
+
+tfbs.annotations$Cluster = factor(tfbs.annotations$Cluster, rev(c("A", "B", "C")))
+ggplot(tfbs.annotations[tfbs.annotations$JASPAR.ID %in% signif.names,], aes(x=Name, y=Cluster, fill=FDR)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), 
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=tfbs.annotations[tfbs.annotations$FDR < 0.1, ],aes(x=Name,y=Cluster),size=1,fill=NA, colour="black")
+
+
+```
+
+```{r eval=FALSE}
+
+tfbs.annotations = data.frame(cluster=c(), id=c(), name=c(), p=c(),adj_p.value=c(), evalue=c(), padj=c())
+for(cid in c(4,5,3,1,6,2)){
+ tmp =read.delim(paste("/Volumes/SequenceBackup/faxdc2/faxdc2_C", cid, "_bg/ame.tsv", sep=""))
+ tmp = tmp[!is.na(tmp$adj_p.value),]
+  tmp$padj = p.adjust(tmp$p.value, "fdr")
+  tfbs.annotations = rbind(tfbs.annotations,  data.frame(cluster=cid, id=tmp$motif_ID, name=tmp$motif_alt_ID, p=tmp$p.value, adj_p.value=tmp$adj_p.value, evalue=tmp$E.value, padj=tmp$padj))
+}
+
+tfbs.annotations$clusterA = ifelse(tfbs.annotations$cluster == 1, "D",  
+                          ifelse(tfbs.annotations$cluster == 2, "F",  
+                          ifelse(tfbs.annotations$cluster == 3, "C", 
+                          ifelse(tfbs.annotations$cluster == 4, "A", 
+                          ifelse(tfbs.annotations$cluster == 5, "B", 
+                          ifelse(tfbs.annotations$cluster == 6, "E", NA
+                            
+))))))
+
+```
+
+```{r eval=FALSE}
+
+
+tfbs.annotations = data.frame(cluster=c(), id=c(), name=c(), p=c(),adj_p.value=c(), evalue=c(), padj=c())
+for(cid in c(4,5,3,1,6,2)){
+ tmp =read.delim(paste("/Volumes/SequenceBackup/faxdc2/faxdc2_C", cid, "_bg/ame.tsv", sep=""))
+ tmp = tmp[!is.na(tmp$adj_p.value),]
+  tmp$padj = p.adjust(tmp$p.value, "fdr")
+  tfbs.annotations = rbind(tfbs.annotations,  data.frame(cluster=cid, id=tmp$motif_ID, name=tmp$motif_alt_ID, p=tmp$p.value, adj_p.value=tmp$adj_p.value, evalue=tmp$E.value, padj=tmp$padj))
+}
+
+
+#cid = 5
+#ggplot(tfbs.annotations[tfbs.annotations$cluster == cid & tfbs.annotations$adj_p.value < 0.1,], aes(x=name, y=cluster, fill=adj_p.value)) +   geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18),    values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=tfbs.annotations[tfbs.annotations$cluster == cid & tfbs.annotations$adj_p.value < 0.1, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+
+signif.names = unique(tfbs.annotations$id[tfbs.annotations$padj < 0.1 & tfbs.annotations$cluster %in% c(4,5,3,2,1,6)])
+
+ap = tfbs.annotations[tfbs.annotations$cluster %in% c(4,5,3,2,1,6)  & tfbs.annotations$id %in% signif.names,]
+
+ap$cluster = factor(ap$cluster, rev(c(4,5,3)))
+
+foo = c(  
+  "FOSL1", "TFAP2B", "FOSL2", "JUNB", "KLF9", "FOS", "JUND", "TBX5", "JDP2", "JUN(var.2)", "ELF3", "ELF4", "EHF", "GATA6", "ETV6" )
+
+ap = ap[ap$name %in% foo,]
+ap$name = factor(ap$name, foo)
+  
+spam = c(
+  #More than 3 adjacent zinc finger factors
+  "MZF1", "ZSCAN4", "SCRT2","Zfx","ZIC4", "GLIS2", "GLI2", "ZIC3", "ZNF263",  "PLAG1", "ZNF740",
+  
+         "SP1", "SP2", "SP8", "SP4","SP3", 
+  
+         "KLF16",  "KLF9", "Klf1","KLF14", "KLF4","KLF5",
+  
+         "SRF", 
+  
+         "TFAP2A(var.2)", "TFAP2A(var.3)", "TFAP2C(var.3)", "TFAP2B(var.3)","TFAP2C", "TFAP2B","TFAP2A", "TFAP2C(var.2) TFAP2B(var.2)",
+  
+         "CTCFL", "CTCF", 
+      
+         "FOSL1", "FOSL2", "JUNB", "FOS::JUND",  "FOSL2::JUN", "FOSB::JUNB",  "FOS", "FOS::JUNB", "JUND", "FOS::JUN",  "FOSL2::JUND", "FOSL2::JUNB", "JUN(var.2)","FOSL1::JUN","JDP2","FOSL1::JUND", "FOSL1::JUNB", "JUN::JUNB","BATF::JUN", "JUN", "NFE2", 
+         "TEAD3",  "TEAD2", "TEAD1",
+        
+         "HIC2","Hic1", 
+         "ZEB1",  
+        
+          # CREB related factors
+         "CREB1",  
+         
+         "TBX21","TBX20", "TBX1", "TBX2", "TBX5", "TBX4", "MGA", 
+         "HIF1A",   
+         
+         "Smad4", "NFIA",  
+         
+         "NR4A2", 
+         "ID4",   # hlh
+         "PAX5",  # paired
+         "NEUROD1", # tal bhlh
+         "ASCL1", # myod bhlh
+         "Nkx2-5", "Dlx4", "Hmx1",# nk homeo
+         "FOXD2",  "Foxd3","FOXL1", 
+         "ZBTB7C", "ZBTB7B", 
+         "GCM1",
+         "SREBF1", # blhl zip
+         "E2F6",
+         "INSM1", 
+         "REL", 
+         "RREB1" )    
+
+
+  "FOSL1", "TFAP2B", "FOSL2", "JUNB", "KLF9", "FOS", "JUND", "TBX5", "JDP2", "JUN(var.2)", "ELF3", "ELF4", "EHF", "GATA6", "ETV6" )
+
+spam = c(
+         "FOSL1", "FOSL2", "JUNB", "FOS", "JUND", "JUN(var.2)", "JDP2", "JUN", "NFE2", 
+         "MZF1","SP1",  "KLF9", "TFAP2B",
+         "TBX5", "REL" )    
+
+
+ap = ap[ap$name %in% spam,]
+ap$name = factor(ap$name, spam)
+  
+ap$cluster = factor(ap$cluster, rev(c(4,5,3,1,6,2)))
+
+
+
+ggplot(ap, aes(x=name, y=cluster, fill=padj)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), limits=c(0,1),
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=ap[ap$padj <  0.1, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+
+
+signif.names = unique(tfbs.annotations$id[tfbs.annotations$padj < 0.01 & tfbs.annotations$cluster %in% c(1,6,2)])
+
+ap = tfbs.annotations[tfbs.annotations$cluster %in% c(1,6,2)  & tfbs.annotations$id %in% signif.names,]
+
+ggplot(ap, aes(x=name, y=cluster, fill=padj)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), limits=c(0,1),
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=ap[ap$cluster %in% c(1,6,2) & ap$padj < 0.1 &  ap$id %in% signif.names, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+
+
+
+
+
+
+
+
+
+signif.names = unique(tfbs.annotations$id[tfbs.annotations$padj < 0.01])
+
+tfbs.annotations$cluster = factor(as.character(tfbs.annotations$cluster), rev(c(4,5,3,1,6,2)))
+
+
+#tfbs.annotations$name = factor(tfbs.annotations$name,
+#c( "TFAP2B(var.3)",  "FOSL1", "FOS",  "BACH2",   "JUNB", "JUND",  "BATF::JUN", "EWSR1-FLI1",  "ETV2",  "ELF4", "ELF5",  "Pparg::Rxra",  "Rxra", "RXRG", "TBX5",  "PKNOX2", "CEBPA", "HSF2" ,  "SNAI2", "KLF9" ))
+
+
+
+ggplot(tfbs.annotations[tfbs.annotations$id %in% signif.names,], aes(x=name, y=cluster, fill=padj)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), limits=c(0,1),
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=tfbs.annotations[tfbs.annotations$padj < 0.01, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+
+```
+
+
+```{r  eval=FALSE}
+tfbs.annotations = data.frame(cluster=c(), id=c(), name=c(), p=c(),adj_p.value=c(), evalue=c(), padj=c())
+for(cid in c(6,2,4,8)){
+  tmp = tmp[!is.na(tmp$adj_p.value),]
+  tmp$padj = p.adjust(tmp$p.value, "fdr")
+  tfbs.annotations = rbind(tfbs.annotations,  data.frame(cluster=cid, id=tmp$motif_ID, name=tmp$motif_alt_ID, p=tmp$p.value, adj_p.value=tmp$adj_p.value, evalue=tmp$E.value, padj=tmp$padj))
+}
+write.table(tfbs.annotations, "tfbs.annotations_cs.txt", sep="\t", quote=FALSE)
+
+
+tfbs.annotations$cluster = factor(as.character(tfbs.annotations$cluster), rev(c(6,2,4,8)))
+
+signif.names = unique(tfbs.annotations$id[tfbs.annotations$padj < 0.1])
+
+ap = tfbs.annotations[ tfbs.annotations$id %in% signif.names,]
+
+ap = ap[ap$name %in%   c( "JUN(var.2)", "JUNB", "JUND", "FOS", "FOSL1", "FOSL2", "JDP2",
+              "SPIB", "ETV6", "ELF5", "ELF4", "ELF3", "EHF",
+               "TFAP2B", "PPARA::RXRA", "SNAI2", "KLF9", "TBX5", "MEF2C", "GATA6"),]
+ap$name = factor(ap$name, 
+                 
+                 c( "JUN(var.2)", "JUNB", "JUND", "FOS", "FOSL1", "FOSL2", "JDP2",
+              "SPIB", "ETV6", "ELF5", "ELF4", "ELF3", "EHF",
+               "TFAP2B","PPARA::RXRA", "SNAI2", "KLF9", "TBX5", "MEF2C", "GATA6"))
+                 
+            
+
+ap$name = factor(ap$name,
+                 
+                 c( "JUN(var.2)", "JUNB", "JUND", "Fos/JUN", "FOSL2::JUND", "FOSL1::JUND", "FOS::JUND", "FOSL2::JUNB", "FOSL1::JUNB", "FOSB::JUNB", "FOS::JUNB", "FOS", "FOSL1", "FOSL2", "JDP2",
+              "SPIB", "ETV6", "ELF5", "ELF4", "ELF3", "EHF",
+              "TFAP2C", "TFAP2B", "TFAP2A(var.2)","PPARA::RXRA","Pparg::Rxra", "SNAI2", "KLF9", "TBX5", "MEF2D", "MEF2A", "MEF2C", "GATA6")
+)
+
+
+ggplot(ap, aes(x=name, y=cluster, fill=padj)) + 
+  geom_tile() + scale_fill_gradientn(name="FDR", colours = colorRampPalette(c("firebrick2", "white"))(18), limits=c(0,1),
+                                     values = rescale(1 / -log10(seq(0, 1, length.out = 18)))[-18]) + theme_classic() + scale_x_discrete(position = "top") +  theme(axis.text.x = element_text(angle = -45, colour="black", family="Arial", hjust = 1, size=8), axis.text.y = element_text(angle= 0, hjust = 1,family="Arial", colour="black", size=10, face="bold"), line = element_blank()) +   geom_tile(data=ap[ ap$padj < 0.1 &  ap$id %in% signif.names, ],aes(x=name,y=cluster),size=1,fill=NA, colour="black")
+
+```
+
+# TPM plots
+
+```{r}
+library(GenomicRanges)
+library(DESeq2)
+results.interaction = readRDS("faxdc2_results_interaction_only56h.rds")
+ensembl.genes = readRDS( "ensembl_genes.rds")
+experimental.metadata = readRDS("faxdc2_experimental_metadata.rds")
+experimental.metadata = experimental.metadata[experimental.metadata$Timepoint!="7d",]
+tpm = read.delim("faxdc2_tpm.txt")
+tpm = tpm[, as.character(experimental.metadata$SampleName)]
+tpm = as.matrix(tpm)
+
+```
+
+ 
+```{r}
+clusters = read.delim("clustering_lfc_6.txt")
+clusters$clusterA = ifelse(clusters$cluster == 1, "D",  
+                          ifelse(clusters$cluster == 2, "F",  
+                          ifelse(clusters$cluster == 3, "C", 
+                          ifelse(clusters$cluster == 4, "A", 
+                          ifelse(clusters$cluster == 5, "B", 
+                          ifelse(clusters$cluster == 6, "E", NA
+                            
+))))))
+```
+head(clusters[clusters$cluster == 5,])
+
+4,5,3,1,6,2
+
+
+
+## Cluster 4
+
+
+
+CDH1 - good example of cluster 4
+```{r, cdh1_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000039068"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ",
+              as.data.frame(results.interaction)[i,]$padj)
+        
+
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")#, limits=c(0,80))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+RAB11FIP3- good example of cluster 4
+```{r, rab11fip3_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000090565"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ",
+              as.data.frame(results.interaction)[i,]$padj)
+        
+
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(5,18))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(5, 20))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(5, 20))
+```
+
+```{r, krt16_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "KRT16"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,100))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,100))
+```
+
+
+
+## Cluster 5
+
+ZSCAN21 - good example of cluster 5
+```{r, zscan21_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "ZSCAN21"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(6,16))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(6,16))
+
+```
+
+
+
+FAM132B - good example of cluster 5
+```{r, fam132b_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "FAM132B"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+
+LRTOMT - good example of cluster 5
+```{r, lrtomt_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "LRTOMT"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+## Cluster 3
+
+
+IGFBP3 - good example of cluster 3
+```{r, igfbp3_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IGFBP3"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(100, 900))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 1000))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 1000))
+
+
+```
+
+
+PI4K2A - good example of cluster 3
+```{r, pi4k2a_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "PI4K2A"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+CDC34 - good example of cluster 3
+```{r, cdc34_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "CDC34"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+## Cluster 1
+FUCA2 - good example of cluster 1
+```{r, fuca2_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000001036"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ",
+              as.data.frame(results.interaction)[i,]$padj)
+        
+
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+ID2 - good example of cluster 1
+```{r, id2_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000115738"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(50, 250))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(50, 250))
+```
+
+
+CDKL1 - good example of cluster 1
+```{r, cdkl1_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000100490"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+## Cluster 6 
+
+
+MBD2 - good example of cluster 6
+```{r, mbd2_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "MBD2"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+
+TRIM2 - good example of cluster 6
+```{r, trim2_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "TRIM2"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+
+QPCT - good example of cluster 6
+```{r, qpct_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "QPCT"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+CDIP1 
+```{r, CDIP1_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "CDIP1"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+
+
+## Cluster 2
+
+
+RIOK1 - good example of cluster 2
+```{r, riok1_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000124784"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+
+DDX18 - good example of cluster 2
+```{r, ddx18_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000088205"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+FASTKD2 - good example of cluster 2
+```{r, fastkd2_tpm, fig.width=4.5, fig.height=5,}
+i = "ENSG00000118246"
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+```
+
+# Other genes 
+
+
+
+
+```{r, MMP28_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "MMP28"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,100))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,100))
+```
+
+
+
+
+```{r, IL32_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IL32"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(30, 160))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(30, 160))
+```
+
+
+```{r, IL22RA1_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IL22RA1"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 130))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 130))
+```
+
+
+
+```{r, MMP14_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "MMP14"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(80, 300))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(80, 300))
+```
+
+
+
+
+```{r, TFF1_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "TFF1"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,1200))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0,1200))
+```
+
+```{r, CDHR2_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "CDHR2"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 400))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 400))
+```
+
+
+
+```{r, IL11_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IL11"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+```{r, CXCL8_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "CXCL8"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+
+
+```{r, CTGF_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "CTGF"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 220), breaks=c(0,50, 100, 150, 200, 220))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 220), breaks=c(0,50, 100, 150, 200, 220))
+```
+
+
+```{r, FOXO3_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "FOXO3"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 25))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 25))
+```
+
+
+```{r, HBEGF_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "HBEGF"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 30))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 30))
+```
+
+```{r, ILK_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "ILK"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(100, 250))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(100, 250))
+```
+
+
+```{r, IL4R_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IL4R"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+
+
+```{r, IL1RL1_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "IL1RL1"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 60))
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM", limits=c(0, 60))
+```
+
+
+```{r, FGFR3_tpm, fig.width=4.5, fig.height=5,}
+i = ensembl.genes[ensembl.genes$hgnc_symbol == "FGFR3"]$gene_id
+
+counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = tpm[i, ])
+counts$timepoint = factor( counts$timepoint, c("0h", "56h"))
+counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+#counts$timepoint = ifelse(counts$timepoint == "0h", 0,ifelse(counts$timepoint == "56h", 56,  NA))
+
+main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ", as.data.frame(results.interaction)[i,]$padj)
+        
+ggplot(counts, aes(x=timepoint, y=counts, fill=condition)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Timepoint", labels=c("0 h", "56 h")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+
+ggplot(counts, aes(x=condition, y=counts, fill=timepoint, colour=timepoint)) + geom_point(position = position_jitter(width = 0.2),size=2) + theme_bw() + theme_classic() + scale_x_discrete("Condition", labels=c("WT", "FAXDC2 KO")) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + scale_y_continuous("TPM")
+```
+
+
+
+```{r}
+sessionInfo()
+```

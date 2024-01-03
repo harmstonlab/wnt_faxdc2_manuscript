@@ -1,0 +1,145 @@
+---
+title: "FAXDC2_comparison_with_clusters"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+x = read.delim("faxdc2_differentialexpression_only56h.txt")
+
+vst.dds = read.table("hpaf2_vst_fdr10_7d.txt", row.names=1)
+
+
+clusters = read.table("gpclust_phi_32_sqrt_0.001_55.txt")
+
+clustering.df = data.frame(
+                gene_id = row.names(vst.dds),
+                cluster = apply(clusters, 1, function(x){which(x==max(x))}),
+                prob = apply(clusters, 1, function(x){max(x)}))
+
+clusters.df = data.frame(
+                  cluster = 1:max(clustering.df$cluster),
+                  representative= NA,
+                  n=0,
+                  gene_symbol = NA
+)
+
+for(cluster_id in  unique(clustering.df$cluster)){
+  print(cluster_id)
+  p = clustering.df$prob[clustering.df$cluster == cluster_id]
+  rg = clustering.df$gene_id[clustering.df$cluster == cluster_id][order(p)]
+  rg = rg[as.character(rg) %in% ensembl.genes$gene_id[ensembl.genes$hgnc_symbol != "" ]][1]
+  print(rg)
+  clusters.df$representative[clusters.df$cluster ==cluster_id] = as.character(rg)
+  clusters.df$n[clusters.df$cluster ==cluster_id] = sum(clustering.df$cluster == cluster_id)
+  clusters.df$gene_symbol[clusters.df$cluster == cluster_id] = ensembl.genes[ as.character(rg) ]$hgnc_symbol
+}
+
+
+```
+
+
+```{r}
+signif.interaction = row.names(x)[x$padj < 0.1]
+
+results = data.frame(id=c(), sig=c(), n=c())
+
+for(i in unique(clustering.df$cluster)){
+  in_cluster = clustering.df$gene_id[clustering.df$cluster == i]
+  
+  print(sum(signif.interaction %in% in_cluster))
+  print(sum(signif.interaction %in% in_cluster)/ length(in_cluster))
+  results = rbind(results, 
+                  data.frame(id=i, sig=sum(signif.interaction %in% in_cluster), n=length(in_cluster))
+                  )
+  
+}
+results$pc = results$sig / results$n
+results[order(results$id),]
+
+barplot(results[order(results$id),]$pc)
+
+clusters.of.interest  =  c(41, 11, 53, 18, 59, 31,  2,  6, 22, 35, 27, 57, 30,  4, 34,  8, 3)
+
+results[results$id %in% clusters.of.interest,]
+```
+
+```{r}
+wntrepressed = c(6,2,4,8, 3)
+
+results[results$id %in% wntrepressed,]
+
+wntrepressed = c(3, 6,2,4,34, 8, 41, 11, 53, 18, 59, 31, 22, 35, 27, 57, 30)
+results[results$id %in% wntrepressed,]
+```
+
+```{r}
+head(cluster_information)
+
+foo = cluster_information[cluster_information$cluster %in% c(4, 5, 3),]
+
+row.names(foo) %in% clustering.df$gene_id[clustering.df$cluster %in% wntrepressed]
+
+```
+
+```{r}
+spam = readRDS("hpaf2_results_timeseries.rds")
+```
+
+
+
+```{r}
+ps = promoters(ensembl.genes[row.names(spam)], 500, 500)
+
+cid = 4
+
+cps = ps[ clustering.df$gene_id[clustering.df$cluster %in% c(cid)] ]
+nps = ps[ !(names(ps) %in% clustering.df$gene_id[clustering.df$cluster %in% c(cid)]) ]
+
+writeXStringSet(getSeq(Hsapiens, cps ), paste("C", cid, ".fasta", sep=""))
+writeXStringSet(getSeq(Hsapiens, nps ), paste("notC", cid, ".fasta", sep=""))
+```
+
+
+
+```{r}
+ps = promoters(ensembl.genes[clustering.df$gene_id], 500, 500)
+
+for( cid in 1:64){
+
+cps = ps[ clustering.df$gene_id[clustering.df$cluster %in% c(cid)] ]
+nps = ps[ !(names(ps) %in% clustering.df$gene_id[clustering.df$cluster %in% c(cid)]) ]
+
+writeXStringSet(getSeq(Hsapiens, cps ), paste("C", cid, ".fasta", sep=""))
+writeXStringSet(getSeq(Hsapiens, nps ), paste("notC", cid, ".fasta", sep=""))
+
+}
+```
+
+
+
+```{r}
+
+signif.interaction = row.names(x)[x$padj < 0.01]
+
+background.entrez.ids
+gostats
+
+
+ids.over.df[ids.over.df$Term=="vesicle-mediated transport",]
+ids.over.df[ids.over.df$Term=="endocytosis",]
+ids.over.df[ids.over.df$Term=="cholesterol biosynthetic process",]
+ids.over.df[ids.over.df$Term=="cell adhesion",]
+ids.over.df[ids.over.df$Term=="cell morphogenesis",]
+ids.over.df[ids.over.df$Term=="regulation of GTPase activity",]
+
+
+```
+
+
+```{r}
+sessionInfo()
+```

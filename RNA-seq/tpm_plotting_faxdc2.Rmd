@@ -1,0 +1,75 @@
+---
+title: "TPM_plotting"
+author: "Nathan Harmston"
+date: "17 February 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+  short=FALSE #if short==TRUE, do not echo code chunks
+  debug=FALSE
+  knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Figures/',
+               echo=!short, warning=debug, message=debug, dev=c("png", "pdf"))
+```
+
+```{r}
+library(ggplot2)
+library(GenomicRanges)
+library(DESeq2)
+```
+
+```{r}
+nctpm = readRDS("faxdc2_tpm.rds")
+dds = readRDS( "faxdc2_deseq2_dds.rds")
+results.interaction = readRDS("faxdc2_results_interaction.rds")
+ensembl.genes = readRDS( "ensembl_genes.rds")
+experimental.metadata = readRDS("faxdc2_experimental_metadata.rds")
+
+```
+
+
+
+```{r tpm_plots}
+for( i in row.names(nctpm)){
+  
+  counts = data.frame(
+          condition = experimental.metadata$Condition, 
+            timepoint = experimental.metadata$Timepoint, 
+            counts = nctpm[i, ])
+  counts$timepoint = factor( counts$timepoint, c("0h", "56h", "7d"))
+  counts$condition = factor( counts$condition, c("WT", "FAXDC2"))
+  counts$timepoint = ifelse(counts$timepoint == "0h", 0,
+                             ifelse(counts$timepoint == "56h", 56,
+                                         ifelse(counts$timepoint=="7d",168,  NA)))
+  
+                                                        counts$timepoint=sqrt(counts$timepoint+2)
+  
+  main = paste(i, ":", ensembl.genes[i]$hgnc_symbol, "\ninteraction padj: ",
+              as.data.frame(results.interaction)[i,]$padj)
+                                                        
+  x = ggplot(counts, aes(x=timepoint, y=counts, group=timepoint)) + geom_boxplot(outlier.colour = NA) + theme_bw() + theme_classic() + scale_x_continuous("Timepoint", labels=c("0h", "56h", "7d"), expand=c(0.01,0.01), breaks=sqrt(c(2, 58, 170))) + ggtitle(main) + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), panel.grid.minor.x=element_blank(), legend.position="none") + geom_point(data=counts, aes(x=timepoint, y=counts, group=timepoint), colour="red", position = position_jitter(width = 0.2),size=2) + scale_y_continuous("TPM")#, limits=c(0,80))
+  
+  x = x + facet_wrap(~condition, scales = "free_x", ncol=3)
+  # 
+  ggsave(paste("plots/faxdc2/tpm/tpm_", i, "_faxdc2_", ensembl.genes$hgnc_symbol[ensembl.genes$gene_id == i], ".pdf", sep=""), x, device=cairo_pdf, width=12, height=8)
+}
+```
+
+```{r}
+nctpm.df = as.data.frame(nctpm[, c("M14L", "M14R", "M16R","M22R",
+                    "M17L", "M25L", "M25R","M29L",
+                    "M18R", "M24L", "M24R","M27L",
+                    "M13R", "M4L","M7R","M8L",
+                    "M1R", "M6L", "M6R","M9L",
+                    "M11R", "M12L", "M12R","M3L" 
+                    )])
+
+nctpm.df$hgnc_symbol = ensembl.genes$hgnc_symbol[ match(row.names(nctpm.df), ensembl.genes$gene_id) ]
+write.table(nctpm.df, "faxdc2_tpm.txt", sep="\t", quote=FALSE)
+```
+
+
+```{r}
+sessionInfo()
+```
+`

@@ -1,0 +1,493 @@
+---
+title: "DifferentialExpression"
+author: "Nathan Harmston"
+date: "20 August 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+  short=FALSE #if short==TRUE, do not echo code chunks
+  debug=FALSE
+  knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='figures/differentialexpressionfaxdc2/',
+               echo=!short, warning=debug, message=debug, dev=c("png", "pdf"))
+```
+
+```{r}
+library("DESeq2")
+library("knitr")
+library("GenomicFeatures")
+library("RColorBrewer")
+library("gplots")
+library("biomaRt")
+library("grid")
+library("gridExtra")
+library("ggplot2")
+library("lattice")
+library("reshape")
+library("geneplotter")
+library("EDASeq")
+library("BSgenome.Hsapiens.UCSC.hg38")
+```
+
+```{r}
+KoverAinNconditions = function(x, k, a, ncond, grps){
+  result = c()
+  for(g in unique(grps)){
+    tmp = x[grps == g]
+    tmp = sum(tmp >= a)
+    result = c(result,  sum(x[grps == g ] > a) >= k)
+  }  
+  
+  return( sum(result) >= ncond)
+}
+```
+
+
+```{r}
+dds = readRDS( "faxdc2_dds_quality_control.rds")
+faxdc2.dds = readRDS( "faxdc2_dds_faxdc2_quality_control.rds")
+
+ensembl.genes = readRDS( "ensembl_genes.rds")
+experimental.metadata = readRDS("faxdc2_experimental_metadata.rds")
+
+dds = dds[apply(counts(dds), 1, function(row) any(row > 0 ))]
+faxdc2.dds = faxdc2.dds[apply(counts(faxdc2.dds), 1, function(row) any(row > 0 ))]
+#ires.dds = ires.dds[apply(counts(ires.dds), 1, function(row) any(row > 0 ))]
+
+```
+
+```{r}
+filter =  apply(counts(dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+#spam =  apply(nctpm, 1, function(x){ any(x > 1 ) })
+#filter = spam & filter
+
+#filter = apply(counts(dds, normalized=TRUE), 1, KoverAinNconditions, 2, 10, 3, experimental.metadata$timepoint) &  apply(counts(dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+dds = dds[filter, ]
+faxdc2.dds = faxdc2.dds[filter, ]
+#filter = apply(counts(ires.dds, normalized=TRUE), 1, KoverAinNconditions, 2, 10, 3, experimental.metadata$timepoint) &  apply(counts(ires.dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+#filter = apply(counts(ires.dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+#ires.dds = ires.dds[filter, ]
+
+#filter = apply(counts(t58a.dds, normalized=TRUE), 1, KoverAinNconditions, 2, 10, 3, experimental.metadata$timepoint) &  apply(counts(t58a.dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+#filter =  apply(counts(t58a.dds, normalized=TRUE), 1, function(x){ mean(x) >= 10 })
+#t58a.dds = t58a.dds[filter, ]
+ 
+```
+
+
+```{r de_interaction}
+design(dds) = ~ Sex + Condition + Timepoint + Condition:Timepoint
+
+dds <- estimateSizeFactors(dds)
+dds <- estimateDispersions(dds)
+dds = nbinomLRT(dds, full= ~1 + Sex + Condition + Timepoint  + Condition:Timepoint, reduced = ~ Sex +  Condition + Timepoint  )
+
+design(faxdc2.dds) = ~ Sex + Condition + Timepoint + Condition:Timepoint
+
+faxdc2.dds <- estimateSizeFactors(faxdc2.dds)
+faxdc2.dds <- estimateDispersions(faxdc2.dds)
+faxdc2.dds = nbinomLRT(faxdc2.dds, full= ~1 + Sex + Condition + Timepoint  + Condition:Timepoint, reduced = ~ Sex +  Condition + Timepoint  )
+
+
+results.interaction = results(dds, filter=rowMeans(counts(dds, normalized=TRUE)), alpha=0.1, independentFiltering=FALSE)
+
+results.interaction$hgnc_symbol = ensembl.genes$hgnc_symbol[match(row.names(results.interaction), ensembl.genes$gene_id)]
+results.interaction$description = ensembl.genes$description[match(row.names(results.interaction), ensembl.genes$gene_id)]
+results.interaction$gene_biotype = ensembl.genes$gene_biotype[match(row.names(results.interaction), ensembl.genes$gene_id)]
+
+summary(results.interaction)
+sum(results.interaction$pvalue < 0.01, na.rm=T)
+sum(results.interaction$pvalue < 0.05, na.rm=T)
+sum(results.interaction$pvalue < 0.1, na.rm=T)
+sum(results.interaction$padj < 0.01, na.rm=T)
+sum(results.interaction$padj < 0.05, na.rm=T)
+sum(results.interaction$padj < 0.1, na.rm=T)
+
+
+hist(results.interaction$pvalue, nclass = 20)
+sum(results.interaction$pvalue < 0.01, na.rm=T)
+res.signif = results.interaction[order(results.interaction$padj, decreasing=FALSE),]
+res.signif = as.data.frame(res.signif[!is.na(res.signif$padj) & res.signif$padj  < 0.1, ])
+```
+
+
+THis is pretty useful
+```{r}
+ mcols(dds,use.names=TRUE)[1:4,]
+```
+
+
+```{r}
+results.main = list()
+
+results.main[["WT_0h_56h"]] = results(dds, contrast = c( "Timepoint", "56h", "0h"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+results.main[["WT_0h_7d"]] = results(dds, contrast = c( "Timepoint", "7d", "0h"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+results.main[["FAXDC2_vs_WT"]] = results(dds, name = c( "Condition_FAXDC2_vs_WT"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+results.main[["FAXDC2:Timepoint56h"]] = results(dds, name = c( "ConditionFAXDC2.Timepoint56h"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+results.main[["FAXDC2:Timepoint7d"]] = results(dds, name = c( "ConditionFAXDC2.Timepoint7d"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+
+results.main[["FAXDC2_0h_56h"]] = results(faxdc2.dds, contrast = c( "Timepoint", "56h", "0h"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+results.main[["FAXDC2_0h_7d"]] = results(faxdc2.dds, contrast = c( "Timepoint", "7d", "0h"),  filter=rowMeans(counts(dds, normalized=TRUE)), test="Wald", alpha=0.1, independentFiltering=FALSE)
+
+for(i in names(results.main)){
+  tmp = results.main[[i]]
+  tmp$hgnc_symbol = ensembl.genes$hgnc_symbol[match(row.names(tmp), ensembl.genes$gene_id)]
+  tmp$description = ensembl.genes$description[match(row.names(tmp), ensembl.genes$gene_id)]
+  tmp$gene_biotype = ensembl.genes$gene_biotype[match(row.names(tmp), ensembl.genes$gene_id)]
+  results.main[[i]] = tmp
+
+}
+
+```
+
+
+
+```{r volcanoplots}
+
+for(i in names(results.main)){
+
+    lfc.threshold = log2(1.5)
+    tmp = as.data.frame(results.main[[i]])
+    tmp$signif = ifelse(tmp$log2FoldChange > lfc.threshold & tmp$padj< 0.01, "U1", 
+                                    ifelse(tmp$log2FoldChange > lfc.threshold & tmp$padj< 0.05, "U2",
+                                      ifelse(tmp$log2FoldChange > lfc.threshold & tmp$padj< 0.1, "U3",
+                                        ifelse(tmp$log2FoldChange < -1*lfc.threshold & tmp$padj< 0.01, "D1", 
+                                         ifelse(tmp$log2FoldChange < -1*lfc.threshold & tmp$padj< 0.05, "D2",
+                                          ifelse(tmp$log2FoldChange < -1*lfc.threshold & tmp$padj< 0.1, "D3",                                                  "N"))))))
+    tmp$signif = factor(tmp$signif, c("N", "U1", "U2", "U3", "D3", "D2", "D1"))
+    print(table(tmp$signif))
+    
+    x = ggplot(data=tmp, aes(x=log2FoldChange, y=-log10(padj), colour= signif)) + geom_point(alpha=1.0, size=2.00) +
+      ggtitle(paste("Volcano Plot: ", i, sep="")) + scale_x_continuous("log2(fold change)", limits=c(-15, 15)) +    
+      scale_y_continuous("-log10(FDR)") + geom_vline(xintercept = lfc.threshold, linetype="dotdash") +
+      geom_vline(xintercept = -1*(lfc.threshold), linetype="dotdash") +
+      geom_hline(yintercept = -log10(0.1), colour="gray40", linetype="dotdash") +   
+      geom_hline(yintercept = -log10(0.05), colour="gray40", linetype="dotdash") + 
+      geom_hline(yintercept = -log10(0.01), colour="gray40", linetype="dotdash") + 
+      scale_colour_manual("", values=c("#666666", "#d73027", "#f46d43", "#fdae61", "#abd9e9", "#74add1", "#4575b4" )) + theme_classic() + theme(legend.position = "none", plot.title = element_text(size = 20), axis.title=element_text(size=16,face="bold"))
+    print(x)
+    ggsave(paste("plots/faxdc2/volcano/volcano_", i, ".pdf", sep=""), x, device=cairo_pdf)
+  
+}
+```
+
+
+```{r}
+hpafII.de = readRDS("hpaf2_results_pairwise.rds")
+```
+
+```{r}
+expressed.in.both = intersect( row.names(hpafII.de[["0h"]][["56h"]]), row.names(results.main[["WT_0h_56h"]]))
+
+cor.test(hpafII.de[["0h"]][["56h"]][expressed.in.both,]$log2FoldChange, 
+         results.main[["WT_0h_56h"]][expressed.in.both,]$log2FoldChange)
+
+cor.test(hpafII.de[["0h"]][["56h"]][expressed.in.both,]$log2FoldChange, results.main[["WT_0h_7d"]][expressed.in.both,]$log2FoldChange, method="spearman")
+
+x = hpafII.de[["0h"]][["56h"]][expressed.in.both,]
+
+y = results.main[["WT_0h_56h"]][expressed.in.both,]
+res = data.frame(gene_id = expressed.in.both, 
+                  xlfc = x$log2FoldChange,
+                  ylfc = y$log2FoldChange,
+                  signif = ifelse(x$padj< 0.1 & y$padj < 0.1 & 
+                             x$log2FoldChange > 0 & y$log2FoldChange > 0, "BOTHUP",
+                             ifelse(x$padj< 0.1 & y$padj < 0.1 & 
+                             x$log2FoldChange < 0 & y$log2FoldChange < 0, "BOTHDOWN", "OTHER")))
+
+res$signif[is.na(res$signif)] = "OTHER"
+
+res$signif = factor(res$signif, c("OTHER", "BOTHDOWN", "BOTHUP"))
+res = res[order(res$signif),]
+table(res$signif)
+
+pl = ggplot(res,            
+            aes(x=xlfc, y=ylfc, color=signif, alpha=0.9)) + geom_point() + theme_classic() + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), axis.text.x = element_text(size=14), axis.text.y = element_text(size=14), panel.grid.minor.x=element_blank(), legend.position = "none", axis.line.x = element_line(color="black", size = 0.2), axis.line.y = element_line(color="black", size = 0.2)) + ggtitle("56h vs 0h - HPAF2 TC vs HPAF2 WT 56h") + scale_x_continuous(limits=c(-5, 5), breaks=c(-5, 0, 5)) + scale_y_continuous(limits=c(-5, 5), breaks=c(-5, 0, 5)) + scale_color_manual(values=c("gray77", "#377EB8", "#E41A1C")) 
+pl
+```
+
+
+```{r}
+expressed.in.both = intersect( row.names(hpafII.de[["0h"]][["7d"]]), row.names(results.main[["WT_0h_7d"]]))
+
+cor.test(hpafII.de[["0h"]][["7d"]][expressed.in.both,]$log2FoldChange, 
+         results.main[["WT_0h_7d"]][expressed.in.both,]$log2FoldChange)
+
+cor.test(hpafII.de[["0h"]][["7d"]][expressed.in.both,]$log2FoldChange, results.main[["WT_0h_7d"]][expressed.in.both,]$log2FoldChange, method="spearman")
+
+x = hpafII.de[["0h"]][["7d"]][expressed.in.both,]
+y = results.main[["WT_0h_7d"]][expressed.in.both,]
+
+res = data.frame(gene_id = expressed.in.both, 
+                  xlfc = x$log2FoldChange,
+                  ylfc = y$log2FoldChange,
+                  signif = ifelse(x$padj< 0.1 & y$padj < 0.1 & 
+                             x$log2FoldChange > 0 & y$log2FoldChange > 0, "BOTHUP",
+                             ifelse(x$padj< 0.1 & y$padj < 0.1 & 
+                             x$log2FoldChange < 0 & y$log2FoldChange < 0, "BOTHDOWN", "OTHER")))
+
+res$signif[is.na(res$signif)] = "OTHER"
+
+res$signif = factor(res$signif, c("OTHER", "BOTHDOWN", "BOTHUP"))
+res = res[order(res$signif),]
+table(res$signif)
+
+pl = ggplot(res,            
+            aes(x=xlfc, y=ylfc, color=signif, alpha=0.9)) + geom_point() + theme_classic() + theme(plot.title = element_text(lineheight=.8, face="bold"), plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"), axis.text.x = element_text(size=14), axis.text.y = element_text(size=14), panel.grid.minor.x=element_blank(), legend.position = "none", axis.line.x = element_line(color="black", size = 0.2), axis.line.y = element_line(color="black", size = 0.2)) + ggtitle("7d vs 0h - HPAF2 TC vs HPAF2 7d") + scale_x_continuous(limits=c(-5, 5), breaks=c(-5, 0, 5)) + scale_y_continuous(limits=c(-5, 5), breaks=c(-5, 0, 5)) + scale_color_manual(values=c("gray77", "#377EB8", "#E41A1C")) 
+pl
+```
+
+
+```{r}
+
+de.results = as.data.frame(results.interaction)
+de.results = de.results[, c("hgnc_symbol", "description", "gene_biotype", "padj")]
+
+de.results$faxdc2_vs_wt_lfc = results.main[["FAXDC2_vs_WT"]]$log2FoldChange
+de.results$faxdc2_vs_wt_padj = results.main[["FAXDC2_vs_WT"]]$padj
+
+de.results$wt_56h_vs_0h_lfc = results.main[["WT_0h_56h"]]$log2FoldChange
+de.results$wt_56h_vs_0h_padj = results.main[["WT_0h_56h"]]$padj
+
+de.results$wt_7d_vs_0h_lfc = results.main[["WT_0h_7d"]]$log2FoldChange
+de.results$wt_7d_vs_0h_padj = results.main[["WT_0h_7d"]]$padj
+
+
+de.results$faxdc2_56h_vs_0h_lfc = results.main[["FAXDC2_0h_56h"]]$log2FoldChange
+de.results$faxdc2_56h_vs_0h_padj = results.main[["FAXDC2_0h_56h"]]$padj
+
+de.results$faxdc2_7d_vs_0h_lfc = results.main[["FAXDC2_0h_7d"]]$log2FoldChange
+de.results$faxdc2_7d_vs_0h_padj = results.main[["FAXDC2_0h_7d"]]$padj
+
+
+
+de.results$interaction_56h_lfc = results.main[["FAXDC2:Timepoint56h"]]$log2FoldChange
+de.results$interaction_56h_padj = results.main[["FAXDC2:Timepoint56h"]]$padj
+
+
+de.results$interaction_7d_lfc = results.main[["FAXDC2:Timepoint7d"]]$log2FoldChange
+de.results$interaction_7d_padj = results.main[["FAXDC2:Timepoint7d"]]$padj
+
+
+
+write.table(de.results, "faxdc2_differentialexpression.txt", sep="\t", quote=FALSE)
+
+```
+
+
+
+```{r}
+dds.coef = coef(dds)
+tmp = dds.coef[,c("Sex_FEMALE_vs_MALE", "Condition_FAXDC2_vs_WT", "Timepoint_56h_vs_0h", "Timepoint_7d_vs_0h", "ConditionFAXDC2.Timepoint56h", "ConditionFAXDC2.Timepoint7d") ]
+
+dds.coef = coef(dds)
+tmp = dds.coef[,c("Condition_FAXDC2_vs_WT", "Timepoint_56h_vs_0h", "Timepoint_7d_vs_0h", "ConditionFAXDC2.Timepoint56h", "ConditionFAXDC2.Timepoint7d") ]
+
+tmp = dds.coef[,c("Condition_FAXDC2_vs_WT", "Timepoint_56h_vs_0h", "ConditionFAXDC2.Timepoint56h") ]
+
+
+
+library(pheatmap)
+tmp = tmp[ row.names(tmp) %in% row.names(results.interaction)[results.interaction$padj < 0.1], ]
+
+```
+
+
+```{r eval=FALSE}
+dd <- as.dist((1 - cor(t(tmp)))/2)
+clusters.hclust = hclust(dd, method="complete")
+
+
+myColor <- colorRampPalette(c("blue", "white", "red"))(50)
+thr = 4
+tmp[tmp > thr] = thr
+tmp[tmp < -thr] = -thr
+
+myBreaks <- c(seq(min(tmp), 0, length.out=ceiling(50/2) + 1), 
+              seq(max(tmp)/50, max(tmp), length.out=floor(50/2)))
+
+
+heat.map <- pheatmap(tmp, cluster_col=FALSE, breaks=myBreaks, cluster_rows=clusters.hclust, show_rownames=FALSE,color = myColor,fontsize_row = 3, legend=TRUE,border_color = NA,cutree_rows=5)
+
+
+
+library(cluster)
+sil = list()
+for(i in 2:20){
+  sil[[i]]= silhouette(cutree(clusters.hclust, k = i ), dd)
+}
+
+df = data.frame(cluster=c(), sil_width=c())
+for(i in 2:20){
+  df = rbind(df, data.frame(cluster = i, sil_width = mean(sil[[i]][1:nrow(tmp),"sil_width"])))
+
+}
+
+ggplot(df, aes(x=cluster, y=sil_width)) + geom_line() + scale_y_continuous("", limits=c(0,0.7)) + theme_classic()
+```
+
+```{r cache=TRUE}
+library(cluster)
+kmeans.gap = clusGap(tmp, FUN=kmeans, K.max=20, B=1000)
+plot(kmeans.gap, main="gap")
+for(i in c("firstSEmax", "Tibs2001SEmax", "globalSEmax",
+                 "firstmax", "globalmax")){
+  print(kmeans.gap, method=i)
+                 }
+k.max <- 15
+wss <- sapply(1:k.max, 
+              function(k){kmeans(tmp, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+
+```{r cache=TRUE}
+nclust = 4
+results.coef.kmeans =  kmeans(tmp, nclust, nstart=1000, iter.max=50)
+
+results.coef = tmp[order(results.coef.kmeans$cluster),]
+
+myColor <- colorRampPalette(c("blue", "white", "red"))(50)
+thr = 4
+tmp[tmp > thr] = thr
+tmp[tmp < -thr] = -thr
+
+myBreaks <- c(seq(min(tmp), 0, length.out=ceiling(50/2) + 1), 
+              seq(max(tmp)/50, max(tmp), length.out=floor(50/2)))
+
+heat.map <- pheatmap(results.coef, cluster_col=FALSE, breaks=myBreaks, cluster_rows=FALSE, show_rownames=FALSE,color = myColor,fontsize_row = 3, legend=TRUE,border_color = NA)
+
+grid.newpage()
+grid.draw(heat.map$gtable)
+
+```
+
+
+```{r}
+clusters = data.frame(gene_id = names(results.coef.kmeans$cluster), 
+           cluster = results.coef.kmeans$cluster,
+           hgnc_symbol = ensembl.genes$hgnc_symbol[ match(names(results.coef.kmeans$cluster), ensembl.genes$gene_id) ])
+          
+write.table(clusters, "interaction_clustering.txt", sep="\t", quote=FALSE, row.names=FALSE)
+
+```
+ 
+```{r}
+for(i in 1:4){
+
+heat.map <- pheatmap(results.coef[as.character(clusters$gene_id[clusters$cluster == i]),], cluster_col=FALSE, breaks=myBreaks, cluster_rows=FALSE, show_rownames=FALSE,color = myColor,fontsize_row = 3, legend=TRUE,border_color = NA)
+
+grid.newpage()
+grid.draw(heat.map$gtable)
+}
+```
+
+```{r}
+clusters[clusters$gene_id == i,]
+i= "ENSG00000006007"
+
+```
+
+
+
+
+```{r eval=FALSE}
+
+
+dd <- as.dist((1 - cor(t(tmp)))/2)
+clusters.hclust = hclust(dd, method="complete")
+
+
+myColor <- colorRampPalette(c("blue", "white", "red"))(50)
+thr = 4
+tmp[tmp > thr] = thr
+tmp[tmp < -thr] = -thr
+
+myBreaks <- c(seq(min(tmp), 0, length.out=ceiling(50/2) + 1), 
+              seq(max(tmp)/50, max(tmp), length.out=floor(50/2)))
+
+heat.map = pheatmap(tmp, cluster_col=TRUE, color = myColor,  breaks=myBreaks,
+                     cluster_rows=clusters.hclust, show_rownames=FALSE,
+                      cluster_cols=FALSE,
+                      fontsize_row = 3, legend=TRUE,
+                     border_color = NA)
+grid.newpage()
+grid.draw(heat.map$gtable)
+
+```
+
+
+
+
+
+
+Keep in mind that the interaction terms are the difference between the two groups at a given time after accounting for the difference at time 0.
+
+```{r vst_calculation}
+vst.dds = assay(vst(dds, blind=FALSE))
+write.table(vst.dds, "TPM/hpaf2_faxdc2_vst.txt", sep="\t", col.names=TRUE, quote=FALSE)
+
+```
+
+```{r eval=FALSE}
+minmax = t(apply(vst.dds, 1, function(x){ (x - min(x)) / (max(x) - min(x))}))
+
+minmax = minmax[, c("M14L", "M14R", "M16R","M22R",
+                    "M17L", "M25L", "M25R","M29L",
+                    "M18R", "M24L", "M24R","M27L",
+                    "M13R", "M4L","M7R","M8L",
+                    "M1R", "M6L", "M6R","M9L",
+                    "M11R", "M12L", "M12R","M3L" 
+                    )]
+
+tmp = minmax[ row.names(minmax) %in% row.names(results.interaction)[results.interaction$padj < 0.1], ]
+
+kmeans.gap = clusGap(tmp, FUN=kmeans, K.max=20, B=1000)
+
+dd <- as.dist((1 - cor(t(tmp)))/2)
+clusters.hclust = hclust(dd, method="complete")
+
+myColor <- colorRampPalette(c("white", "red"))(10)
+
+myBreaks <- seq(0, 1, length.out=10)
+
+heat.map = pheatmap(tmp, color = myColor,  breaks=myBreaks,
+                     cluster_rows=clusters.hclust, show_rownames=FALSE,
+                      cluster_cols=FALSE,
+                      fontsize_row = 3, legend=TRUE,
+                     border_color = NA)
+grid.newpage()
+grid.draw(heat.map$gtable)
+
+
+
+```
+
+
+
+```{r}
+saveRDS(results.main, "faxdc2_results_main.rds")
+saveRDS(dds, "faxdc2_deseq2_dds.rds")
+
+saveRDS(results.interaction, "faxdc2_results_interaction.rds")
+saveRDS(ensembl.genes, "ensembl_genes.rds")
+
+saveRDS(dds, "dds_results.rds")
+```
+
+
+
+```{r}
+sessionInfo()
+```
+

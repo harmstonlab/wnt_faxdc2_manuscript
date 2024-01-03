@@ -1,0 +1,307 @@
+---
+title: "QualityControl"
+author: "Nathan Harmston"
+date: "20 August 2017"
+output: html_document
+---
+
+```{r global_options, echo=FALSE}
+  short=FALSE #if short==TRUE, do not echo code chunks
+  debug=FALSE
+  knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='./figures/qualitycontrolfaxdc2/',
+               echo=!short, warning=debug, message=debug, dev=c("png", "cairo_pdf"))
+```
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(genefilter)
+library(GenomicFeatures)
+library(biomaRt)
+library(knitr)
+library(reshape2)
+```
+
+FAXDC2 
+======
+
+```{r cache=TRUE}
+hg.gtf.db <- makeTxDbFromGFF( "Homo_sapiens.GRCh38.79.chr.gtf", format="gtf" )
+ensembl.genes = genes(hg.gtf.db)
+human = useEnsembl(biomart="ENSEMBL_MART_ENSEMBL",host="asia.ensembl.org", dataset="hsapiens_gene_ensembl", version="79")
+bm.annotations = getBM(attributes=c("ensembl_gene_id", "entrezgene", "gene_biotype", "hgnc_symbol", "status", "description", "refseq_mrna", "refseq_ncrna"), mart=human, filters="ensembl_gene_id", values=ensembl.genes$gene_id, uniqueRows=TRUE)
+ensembl.genes$hgnc_symbol = bm.annotations$hgnc_symbol[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+ensembl.genes$gene_biotype = bm.annotations$gene_biotype[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+ensembl.genes$status = bm.annotations$status[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+ensembl.genes$description = bm.annotations$description[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+ensembl.genes$entrezgene = bm.annotations$entrezgene[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+ensembl.genes$refseq = bm.annotations$refseq_mrna[ match(ensembl.genes$gene_id, bm.annotations$ensembl_gene_id) ]
+
+```
+
+```{r}
+experimental.metadata = read.table("sampledata.txt", sep="\t", header=TRUE, stringsAsFactors=FALSE)
+
+#experimental.metadata = experimental.metadata[experimental.metadata$Condition %in% c("WT", "FAXDC2"),]
+
+data = matrix(0, ncol=length(experimental.metadata$SampleName), nrow=60433)
+colnames(data)= experimental.metadata$SampleName
+for( i in experimental.metadata$SampleName){
+  data[,i] = read.table(paste("counts/", i, "_rsem.genes.results",sep=""), sep="\t", header=TRUE)$expected_count
+}
+row.names(data) = read.table(paste("counts/", i, "_rsem.genes.results",sep=""), sep="\t", header=TRUE)$gene_id
+
+
+experimental.metadata$Timepoint = factor(experimental.metadata$Timepoint,
+                             levels=c( "0h", "56h", "7d"))
+
+experimental.metadata$Sex = factor(experimental.metadata$Sex,
+                             levels=c( "MALE", "FEMALE"))
+#metadata$timepoint = factor(metadata$timepoint,
+#                             levels=c( "0h", "56h"))
+
+experimental.metadata$Condition = factor(experimental.metadata$Condition,
+                             levels=c("WT", "FAXDC2", "TRAM"))
+
+data.mat = apply(round(data), c(1,2), as.integer)
+dds = DESeqDataSetFromMatrix(data.mat, experimental.metadata, ~ Sex + Condition + Timepoint + Condition:Timepoint)
+colnames(dds) = colnames(data.mat)
+
+dds <- estimateSizeFactors(dds) 
+dds <- estimateDispersions(dds)
+rld <- rlog(dds)
+
+re.experimental.metadata = experimental.metadata
+re.experimental.metadata$Condition = factor(re.experimental.metadata$Condition,
+                             levels=c("FAXDC2", "WT"))
+
+faxdc2.dds = DESeqDataSetFromMatrix(data.mat, re.experimental.metadata, ~ Sex + Condition + Timepoint + Condition:Timepoint)
+
+faxdc2.dds <- estimateSizeFactors(faxdc2.dds) 
+faxdc2.dds <- estimateDispersions(faxdc2.dds)
+```
+
+Sample clustering
+============
+
+```{r hclust}
+sampleDists <- dist( t( assay(rld) ) )
+plot(hclust(sampleDists))
+```
+
+
+```{r pca_samples}
+ntop = 500
+rv <- rowVars(assay(rld))
+select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+pca = prcomp(t(assay(rld)[select,]))
+percentVar <- pca$sdev^2/sum(pca$sdev^2)
+
+(data <- plotPCA(rld, intgroup = c( "Condition", "Timepoint"), returnData=TRUE))
+percentVar <- round(100 * attr(data, "percentVar"))
+ggplot(data, aes(PC1, PC2, color=Condition, shape=Timepoint)) + geom_point(size=3) +
+  scale_x_continuous(paste0("PC1: ",percentVar[1],"% variance")) +
+  scale_y_continuous(paste0("PC2: ",percentVar[2],"% variance")) +
+  coord_fixed() + theme_classic() + geom_text(data = data, aes(PC1,PC2, label = name), hjust = 1.2)
+```
+
+
+Number of genes detected
+```{r numberofgenes}
+detected = apply(counts(dds), 2, function(col) sum(col > 0 ))
+detected = as.data.frame(detected)
+detected$name = row.names(detected)
+detected$name = factor(detected$name, experimental.metadata$SampleName)
+ggplot(detected, aes(x=name, y=detected)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + scale_y_continuous("# Genes detected", expand=c(0,0)) + scale_x_discrete("Sample")
+```
+
+
+```{r}
+rrna.genes = names(ensembl.genes[ensembl.genes$gene_biotype %in% c("Mt_rRNA", "rRNA" )])
+percentage.of.rrna = (colSums(counts(dds[ rownames(counts(dds)) %in% rrna.genes])) / colSums(counts(dds))) * 100
+
+percentage.of.rrna = as.data.frame(percentage.of.rrna)
+percentage.of.rrna$name = row.names(percentage.of.rrna)
+percentage.of.rrna$name = factor(percentage.of.rrna$name, experimental.metadata$SampleName)
+ggplot(percentage.of.rrna, aes(x=name, y=percentage.of.rrna)) + geom_bar(stat="identity") + theme_classic() + coord_flip() + scale_y_continuous("% rRNA", expand=c(0,0)) + scale_x_discrete("Sample")
+```
+
+Proportion of reads mapping to protein-coding, pseudogenes and non-coding RNA ... 
+```{r reads_genebiotype}
+pc = ensembl.genes$gene_id[ensembl.genes$gene_biotype == "protein_coding"]
+pg = ensembl.genes$gene_id[ensembl.genes$gene_biotype %in% unique(ensembl.genes$gene_biotype)[grep("pseudogene", unique(ensembl.genes$gene_biotype))]]
+lc = ensembl.genes$gene_id[ensembl.genes$gene_biotype == "lincRNA"]
+
+totalcounts.pc = colSums(counts(dds)[rownames(counts(dds)) %in% pc,])
+totalcounts.pg = colSums(counts(dds)[rownames(counts(dds)) %in% pg,])
+totalcounts.lc = colSums(counts(dds)[rownames(counts(dds)) %in% lc,])
+
+totalcounts.other = colSums(counts(dds)[!(rownames(counts(dds)) %in% c(lc,pc,pg)),])
+
+counts.by.biotype = data.frame(name = names(totalcounts.pc),
+                         protein_coding = totalcounts.pc,
+                         pseudogene = totalcounts.pg,
+                         lincRNA = totalcounts.lc,
+                         other = totalcounts.other
+                         
+                         )
+
+counts.by.biotype$name = factor(counts.by.biotype$name, experimental.metadata$SampleName)
+
+counts.by.biotype = as.data.frame(t(apply(counts.by.biotype[,2:5], 1, function(x){ 100 * (x / sum(x)) }) ))
+counts.by.biotype$name = names(totalcounts.pc)
+counts.by.biotype$name = factor(counts.by.biotype$name, experimental.metadata$SampleName)
+
+library(scales)
+
+counts.by.biotype.melt = melt(counts.by.biotype)
+ggplot(counts.by.biotype.melt, aes(x=name, y=value, fill=variable)) +  geom_bar(stat="identity") + theme_classic() + scale_y_continuous("% reads", labels = dollar_format(suffix = "%", prefix = ""),  expand=c(0,0)) + scale_x_discrete("Sample") + theme(axis.text.x = element_text(angle = 45, colour="black", family="Arial", hjust = 1, size=8))
+```
+
+
+Rempove any mitochondrial genes and small RNAss and ribosomal RNA from the analysis, keep it nice and clean. 
+```{r}
+dds =  dds[row.names(counts(dds)) %in% ensembl.genes$gene_id[as.character(seqnames(ensembl.genes)) != "chrM"],]
+dds =  dds[!(row.names(counts(dds)) %in% ensembl.genes$gene_id[ ensembl.genes$gene_biotype %in% c("Mt_tRNA", "Mt_rRNA", "rRNA", "snoRNA", "snRNA" )]),]
+dds = dds[rowSums(counts(dds)) > 0,]
+
+
+faxdc2.dds = faxdc2.dds[row.names(counts(faxdc2.dds)) %in% ensembl.genes$gene_id[as.character(seqnames(ensembl.genes)) != "chrM"],]
+faxdc2.dds =  faxdc2.dds[!(row.names(counts(faxdc2.dds)) %in% ensembl.genes$gene_id[ ensembl.genes$gene_biotype %in% c("Mt_tRNA", "Mt_rRNA", "rRNA", "snoRNA", "snRNA" )]),]
+faxdc2.dds = faxdc2.dds[rowSums(counts(faxdc2.dds)) > 0,]
+```
+
+How does the clustering look now? 
+
+```{r}
+dds <- estimateSizeFactors(dds) 
+dds <- estimateDispersions(dds)
+rld <- rlog(dds)
+
+```
+
+
+```{r hclust_filt}
+sampleDists <- dist( t( assay(rld) ) )
+plot(hclust(sampleDists))
+```
+
+
+```{r pca_samples_filt}
+ntop = 500
+rv <- rowVars(assay(rld))
+select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+pca = prcomp(t(assay(rld)[select,]))
+percentVar <- pca$sdev^2/sum(pca$sdev^2)
+
+(data <- plotPCA(rld, intgroup = c( "Condition", "Timepoint", "Sex"), returnData=TRUE))
+percentVar <- round(100 * attr(data, "percentVar"))
+
+ggplot(data, aes(PC1, PC2, color=Condition, shape=Timepoint)) + geom_point(size=3) +
+  scale_x_continuous(paste0("PC1: ",percentVar[1],"% variance")) +
+  scale_y_continuous(paste0("PC2: ",percentVar[2],"% variance")) +
+  coord_fixed() + theme_classic() #+ geom_text(data = data, aes(PC1,PC2, label = name), hjust = 1.2)
+
+ggplot(data, aes(PC1, PC2, color=Sex)) + geom_point(size=3) +
+  scale_x_continuous(paste0("PC1: ",percentVar[1],"% variance")) +
+  scale_y_continuous(paste0("PC2: ",percentVar[2],"% variance")) +
+  coord_fixed() + theme_classic() #+ geom_text(data = data, aes(PC1,PC2, label = name), hjust = 1.2)
+```
+
+```{r}
+print(sizeFactors(dds))
+df = data.frame(sample_id = names(sizeFactors(dds)), sizeFactors = sizeFactors(dds))
+
+ggplot(df, aes(x = sample_id, y=sizeFactors)) + geom_bar(stat="identity") + scale_y_continuous(limits=c(0,2), expand=c(0,0)) + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1, colour="black", family="Arial", size=12))
+```
+
+```{r maplots}
+for(cd in unique(experimental.metadata$Condition)){
+  print(cd)
+  for(tp in unique(experimental.metadata$Timepoint)){
+    print(tp)
+    samples = experimental.metadata$SampleName[experimental.metadata$Condition == cd & experimental.metadata$Timepoint == tp]
+    for(i in 1:(length(samples)-1)){
+      print(i)
+      for(j in (i+1):(length(samples))){
+        print(j)
+        
+      x = counts(dds, normalized=TRUE)[, samples[i]]
+      y = counts(dds, normalized=TRUE)[, samples[j]]
+      
+      M = log2(x) - log2(y)
+      A = (log2(x) + log2(y)) / 2
+      df = data.frame(gene_id = names(x), M=M, A=A)
+      
+      print(ggplot(df, aes(x=A, y=M)) + geom_point(size = 1.5, alpha = 1/5) + theme_classic() + geom_hline(yintercept=0, colour="blue3", linetype="dashed") + ggtitle(paste(cd, ":", tp, " ", samples[i], "vs", samples[j],  median(abs(x-y)), sep= " ")) + stat_smooth(se = FALSE, method = "loess", color = "red3") + theme_classic())
+      }
+    }
+    
+  }
+}
+```
+
+
+```{r nc_boxplot}
+
+nc = counts(dds, normalized=TRUE)
+nc.melt = melt(nc)
+
+ggplot(nc.melt, aes(x=Var2, y=value)) + geom_boxplot() + theme_classic() + theme(axis.text.x = element_text(angle = 90, colour="black", hjust = 1)) + scale_x_discrete("Sample") + scale_y_continuous("Normalised counts")
+```
+
+There are some big outliers in the counts distribution here .... what are they? Nothing crazy
+
+```{r}
+nc.threshold = 150000
+test = apply(nc, 1, function(x){ any(x> nc.threshold) })
+
+ensembl.genes[names(test[test])]
+```
+
+What does the TPMs look like?
+
+
+```{r tpm}
+effective_lengths = matrix(0, ncol=length(experimental.metadata$SampleName), nrow=60433)
+colnames(effective_lengths)= experimental.metadata$SampleName
+for( i in experimental.metadata$SampleName){
+  effective_lengths[,i] = read.table(paste("counts/", i, "_rsem.genes.results",sep=""), sep="\t", header=TRUE)$effective_length
+}
+row.names(effective_lengths) = read.table(paste("counts/", i, "_rsem.genes.results",sep=""), sep="\t", header=TRUE)$gene_id
+
+effective_lengths = rowMeans(effective_lengths[row.names(counts(dds)),])
+ncrpk = counts(dds) / (effective_lengths / 1000)
+ncrpk = apply(ncrpk, c(1,2), function(x){if(is.nan(x)){0}else{x}})
+ncrpk = apply(ncrpk, c(1,2), function(x){if(is.infinite(x)){0}else{x}})
+ncscalingfactor = colSums(ncrpk) / 1e6
+nctpm = sweep(ncrpk, 2, ncscalingfactor, "/")
+
+nctpm.melt = melt(nctpm)
+ggplot(nctpm.melt, aes(x=Var2, y=value)) + geom_boxplot() + theme_classic() + theme(axis.text.x = element_text(angle = 90, colour="black", hjust = 1)) + scale_x_discrete("Sample") + scale_y_continuous("TPM")
+```
+
+```{r}
+tpm.threshold = 10000
+test.tpm = apply(nctpm, 1, function(x){ any(x> tpm.threshold) })
+
+ensembl.genes[names(test.tpm[test.tpm])]
+```
+
+Save all objects for subsequent analysis!
+
+```{r}
+saveRDS(dds, "faxdc2_dds_quality_control.rds")
+saveRDS(faxdc2.dds, "faxdc2_dds_faxdc2_quality_control.rds")
+
+saveRDS(nctpm, "faxdc2_tpm.rds")
+saveRDS(ensembl.genes, "ensembl_genes.rds")
+saveRDS(hg.gtf.db, "hg_gtf_db.rds")
+saveRDS(experimental.metadata, "faxdc2_experimental_metadata.rds")
+```
+
+
+```{r}
+sessionInfo()
+```
+
